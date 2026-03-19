@@ -1,0 +1,835 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>📊 Analytics — The Process</title>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<style>
+:root{
+  --primary:#800000;--primary-light:#a00000;--gold:#D4AF37;
+  --bg:#f0f2f5;--card:#fff;--border:#e0e0e0;--text:#333;--muted:#777;
+  --danger:#dc3545;--success:#28a745;--info:#007bff;--purple:#6f42c1;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);direction:rtl;min-height:100vh;}
+
+/* ── Auth ── */
+#authScreen{position:fixed;inset:0;background:linear-gradient(135deg,#0B0C2A,#1a1a4e 50%,#800000);display:flex;align-items:center;justify-content:center;z-index:9999;}
+.auth-card{background:#fff;border-radius:20px;padding:3rem 2.5rem;width:360px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.4);}
+.auth-card h1{color:var(--primary);margin-bottom:.5rem;font-size:1.8rem;}
+.auth-card p{color:var(--muted);margin-bottom:1.5rem;}
+.auth-input{width:100%;padding:.85rem 1rem;border:2px solid var(--border);border-radius:10px;font-family:Tajawal,sans-serif;font-size:1rem;margin-bottom:1rem;direction:ltr;text-align:center;letter-spacing:2px;}
+.auth-input:focus{outline:none;border-color:var(--primary);}
+.auth-btn{width:100%;padding:.85rem;background:var(--primary);color:#fff;border:none;border-radius:10px;font-family:Tajawal,sans-serif;font-size:1.05rem;font-weight:700;cursor:pointer;}
+.auth-btn:hover{background:var(--primary-light);}
+#authError{color:var(--danger);margin-top:.7rem;font-size:.9rem;min-height:1.2rem;}
+
+/* ── App ── */
+#app{display:none;}
+header{background:linear-gradient(135deg,#800000,#2c3e50);color:#fff;padding:1.2rem 2rem;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:100;box-shadow:0 4px 20px rgba(0,0,0,.2);}
+.header-title{font-size:1.4rem;font-weight:800;}
+.header-title span{color:var(--gold);}
+.header-actions{display:flex;gap:.7rem;align-items:center;}
+.back-btn,.refresh-btn{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;padding:.5rem 1.2rem;border-radius:8px;cursor:pointer;font-family:Tajawal,sans-serif;font-size:.9rem;text-decoration:none;display:inline-flex;align-items:center;gap:.4rem;}
+.back-btn:hover,.refresh-btn:hover{background:rgba(255,255,255,.25);}
+
+.container{max-width:1100px;margin:0 auto;padding:2rem 1rem;}
+
+/* ── KPI Cards ── */
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:1rem;margin-bottom:2rem;}
+.kpi-card{background:var(--card);border-radius:16px;padding:1.5rem;text-align:center;box-shadow:0 4px 16px rgba(0,0,0,.07);border-top:4px solid var(--primary);}
+.kpi-card.gold{border-top-color:var(--gold);}
+.kpi-card.green{border-top-color:var(--success);}
+.kpi-card.blue{border-top-color:var(--info);}
+.kpi-card.purple{border-top-color:var(--purple);}
+.kpi-num{font-size:2.4rem;font-weight:800;color:var(--primary);line-height:1;}
+.kpi-card.gold .kpi-num{color:#b8860b;}
+.kpi-card.green .kpi-num{color:var(--success);}
+.kpi-card.blue .kpi-num{color:var(--info);}
+.kpi-card.purple .kpi-num{color:var(--purple);}
+.kpi-label{font-size:.85rem;color:var(--muted);margin-top:.4rem;font-weight:600;}
+
+/* ── Tabs ── */
+.tab-nav{display:flex;gap:.5rem;margin-bottom:1.5rem;background:#fff;border-radius:14px;padding:.5rem;box-shadow:0 2px 10px rgba(0,0,0,.06);flex-wrap:wrap;}
+.tab-btn{flex:1;min-width:130px;padding:.7rem 1rem;border:none;border-radius:10px;font-family:Tajawal,sans-serif;font-size:.95rem;font-weight:700;cursor:pointer;color:#777;background:transparent;transition:all .2s;}
+.tab-btn.active{background:var(--primary);color:#fff;box-shadow:0 4px 12px rgba(128,0,0,.25);}
+.tab-btn:not(.active):hover{background:#f5f5f5;color:#333;}
+
+/* ── Filters ── */
+.filters{background:var(--card);border-radius:14px;padding:1rem 1.5rem;box-shadow:0 2px 10px rgba(0,0,0,.06);margin-bottom:1.5rem;display:flex;gap:1rem;flex-wrap:wrap;align-items:flex-end;}
+.fil-group{display:flex;flex-direction:column;gap:.3rem;min-width:160px;}
+.fil-group label{font-size:.8rem;font-weight:700;color:var(--muted);}
+.fil-group select,.fil-group input{padding:.55rem .9rem;border:2px solid var(--border);border-radius:8px;font-family:Tajawal,sans-serif;font-size:.9rem;color:var(--text);background:#fff;cursor:pointer;}
+.fil-group select:focus,.fil-group input:focus{outline:none;border-color:var(--primary);}
+.btn-apply{padding:.6rem 1.5rem;background:var(--primary);color:#fff;border:none;border-radius:8px;font-family:Tajawal,sans-serif;font-size:.95rem;font-weight:700;cursor:pointer;white-space:nowrap;}
+.btn-apply:hover{background:var(--primary-light);}
+
+/* ── Table Card ── */
+.table-card{background:var(--card);border-radius:16px;box-shadow:0 4px 20px rgba(0,0,0,.07);overflow:hidden;margin-bottom:1.5rem;}
+.table-header{padding:1rem 1.5rem;display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid var(--border);}
+.table-header h2{font-size:1.05rem;color:var(--primary);display:flex;align-items:center;gap:.5rem;}
+.table-header .count-badge{background:#f0e8fd;color:var(--purple);padding:2px 10px;border-radius:12px;font-size:.8rem;font-weight:700;}
+table{width:100%;border-collapse:collapse;}
+thead tr{background:#f8f9fa;}
+th,td{padding:.75rem 1rem;text-align:right;border-bottom:1px solid var(--border);font-size:.88rem;}
+th{font-weight:700;color:var(--muted);font-size:.8rem;text-transform:uppercase;}
+tbody tr:hover{background:#fafafa;}
+tbody tr:last-child td{border-bottom:none;}
+.empty-row td{text-align:center;padding:3rem;color:#aaa;}
+
+/* ── Badges ── */
+.badge{display:inline-block;padding:2px 10px;border-radius:10px;font-size:.78rem;font-weight:700;}
+.badge-red{background:#fde8e8;color:#800000;}
+.badge-blue{background:#e8f4fd;color:#007bff;}
+.badge-green{background:#d4edda;color:#155724;}
+.badge-gold{background:#fff8e1;color:#b8860b;}
+.badge-purple{background:#f0e8fd;color:#6f42c1;}
+.badge-gray{background:#f0f0f0;color:#555;}
+
+/* ── Activity Bar ── */
+.act-bar-wrap{height:8px;background:#f0f0f0;border-radius:4px;overflow:hidden;min-width:80px;}
+.act-bar{height:100%;background:var(--primary);border-radius:4px;transition:width .4s;}
+
+/* ── Student expand row ── */
+.expand-btn{background:none;border:none;cursor:pointer;color:var(--info);font-size:.85rem;font-weight:700;}
+.sub-row{display:none;}
+.sub-row td{background:#f8f0ff;padding:1rem 1.5rem;}
+.sub-row.open{display:table-row;}
+.sub-table{width:100%;border-collapse:collapse;font-size:.83rem;}
+.sub-table th,.sub-table td{padding:.4rem .7rem;border-bottom:1px solid #e0d0f0;text-align:right;}
+.sub-table th{color:var(--purple);font-weight:700;}
+
+/* ── Online indicator ── */
+.online-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-left:5px;}
+.online-dot.online{background:#28a745;box-shadow:0 0 6px #28a745;}
+.online-dot.offline{background:#ccc;}
+
+/* ── Spinner ── */
+.spinner{text-align:center;padding:3rem;color:#aaa;font-size:1.5rem;}
+
+/* ── Toast ── */
+.toast{position:fixed;bottom:2rem;left:50%;transform:translateX(-50%) translateY(100px);background:#2c3e50;color:#fff;padding:.8rem 2rem;border-radius:30px;font-size:1rem;font-weight:600;z-index:9999;opacity:0;transition:all .3s;}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+/* ── Export btn ── */
+.btn-export{background:#e8f4fd;color:var(--info);border:1px solid #bee5f9;padding:.45rem 1rem;border-radius:8px;cursor:pointer;font-family:Tajawal,sans-serif;font-size:.85rem;font-weight:700;display:inline-flex;align-items:center;gap:.4rem;}
+.btn-export:hover{background:#007bff;color:#fff;}
+
+@media(max-width:650px){
+  .kpi-grid{grid-template-columns:repeat(2,1fr);}
+  .tab-btn{font-size:.82rem;padding:.6rem .5rem;}
+  header{padding:1rem;}
+  th:nth-child(4),td:nth-child(4){display:none;}
+}
+</style>
+</head>
+<body>
+
+<!-- Auth -->
+<div id="authScreen">
+  <div class="auth-card">
+    <div style="font-size:3rem;margin-bottom:.5rem">📊</div>
+    <h1>Analytics</h1>
+    <p>The Process — لوحة الإحصائيات</p>
+    <input type="password" id="adminPass" class="auth-input" placeholder="كلمة المرور"
+           onkeydown="if(event.key==='Enter')submitAuth()">
+    <button class="auth-btn" onclick="submitAuth()"><i class="fas fa-chart-bar"></i> دخول</button>
+    <div id="authError"></div>
+  </div>
+</div>
+
+<!-- App -->
+<div id="app">
+  <header>
+    <div class="header-title">📊 <span>Analytics</span> — The Process</div>
+    <div class="header-actions">
+      <button class="refresh-btn" onclick="loadAll()"><i class="fas fa-sync-alt"></i> تحديث</button>
+      <a href="admin.html" class="back-btn"><i class="fas fa-arrow-right"></i> لوحة التحكم</a>
+    </div>
+  </header>
+
+  <div class="container">
+
+    <!-- KPIs -->
+    <div class="kpi-grid">
+      <div class="kpi-card"><div class="kpi-num" id="kpiStudents">—</div><div class="kpi-label">📚 إجمالي الطلاب</div></div>
+      <div class="kpi-card gold"><div class="kpi-num" id="kpiWatches">—</div><div class="kpi-label">▶️ إجمالي المشاهدات</div></div>
+      <div class="kpi-card green"><div class="kpi-num" id="kpiActive">—</div><div class="kpi-label">✅ شافوا فيديو</div></div>
+      <div class="kpi-card blue"><div class="kpi-num" id="kpiLogins">—</div><div class="kpi-label">🔑 إجمالي الدخولات</div></div>
+      <div class="kpi-card purple"><div class="kpi-num" id="kpiVideos">—</div><div class="kpi-label">🎬 فيديوهات متاحة</div></div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tab-nav">
+      <button class="tab-btn active" id="tabStudents" onclick="switchTab('students')">👤 الطلاب</button>
+      <button class="tab-btn" id="tabVideos"   onclick="switchTab('videos')">🎬 الفيديوهات</button>
+      <button class="tab-btn" id="tabLogs"     onclick="switchTab('logs')">📋 سجل المشاهدات</button>
+      <button class="tab-btn" id="tabLogin"    onclick="switchTab('login')">🔑 سجل الدخول</button>
+      <button class="tab-btn" id="tabInactive" onclick="switchTab('inactive')">😴 لم يدخلوا</button>
+    </div>
+
+    <!-- ══════════════ TAB: STUDENTS ══════════════ -->
+    <div id="panelStudents">
+      <div class="filters">
+        <div class="fil-group">
+          <label>🔍 بحث</label>
+          <input type="text" id="sSearch" placeholder="اسم أو كود..." oninput="renderStudents()">
+        </div>
+        <div class="fil-group">
+          <label>📚 القسم</label>
+          <select id="sLang" onchange="renderStudents()">
+            <option value="">الكل</option>
+            <option value="عربي">عربي</option>
+            <option value="لغات">لغات</option>
+          </select>
+        </div>
+        <div class="fil-group">
+          <label>📊 ترتيب بـ</label>
+          <select id="sSort" onchange="renderStudents()">
+            <option value="watches_desc">الأكثر مشاهدة</option>
+            <option value="watches_asc">الأقل مشاهدة</option>
+            <option value="last_desc">آخر دخول (الأحدث)</option>
+            <option value="last_asc">آخر دخول (الأقدم)</option>
+            <option value="name">الاسم أبجدي</option>
+          </select>
+        </div>
+        <button class="btn-export" onclick="exportStudentsCSV()"><i class="fas fa-download"></i> تصدير CSV</button>
+      </div>
+      <div class="table-card">
+        <div class="table-header">
+          <h2>👤 الطلاب <span class="count-badge" id="sCount">0</span></h2>
+        </div>
+        <div style="overflow-x:auto">
+          <table>
+            <thead><tr>
+              <th>الطالب</th>
+              <th>الكود</th>
+              <th>القسم</th>
+              <th>VIDEO CODE</th>
+              <th>المشاهدات</th>
+              <th>آخر دخول</th>
+              <th>النشاط</th>
+              <th>تفاصيل</th>
+            </tr></thead>
+            <tbody id="studentsBody"><tr class="empty-row"><td colspan="8"><div class="spinner"><i class="fas fa-spinner fa-spin"></i></div></td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════ TAB: VIDEOS ══════════════ -->
+    <div id="panelVideos" style="display:none">
+      <div class="filters">
+        <div class="fil-group">
+          <label>📦 CODE</label>
+          <select id="vCode" onchange="renderVideos()">
+            <option value="">الكل</option>
+            <option>CODE1</option><option>CODE2</option><option>CODE3</option>
+            <option>CODE4</option><option>CODE5</option><option>CODE6</option>
+            <option>CODE7</option><option>CODE8</option><option>CODE9</option>
+            <option>CODE10</option><option>CODE11</option><option>CODE12</option><option>CODE13</option>
+          </select>
+        </div>
+        <div class="fil-group">
+          <label>📊 ترتيب بـ</label>
+          <select id="vSort" onchange="renderVideos()">
+            <option value="views_desc">الأكثر مشاهدة</option>
+            <option value="views_asc">الأقل مشاهدة</option>
+            <option value="last_desc">آخر مشاهدة (الأحدث)</option>
+          </select>
+        </div>
+        <button class="btn-export" onclick="exportVideosCSV()"><i class="fas fa-download"></i> تصدير CSV</button>
+      </div>
+      <div class="table-card">
+        <div class="table-header">
+          <h2>🎬 الفيديوهات <span class="count-badge" id="vCount">0</span></h2>
+        </div>
+        <div style="overflow-x:auto">
+          <table>
+            <thead><tr>
+              <th>الفيديو</th>
+              <th>CODE</th>
+              <th>الفصل</th>
+              <th>المشاهدات</th>
+              <th>آخر مشاهدة</th>
+              <th>شريط النشاط</th>
+            </tr></thead>
+            <tbody id="videosBody"><tr class="empty-row"><td colspan="6"><div class="spinner"><i class="fas fa-spinner fa-spin"></i></div></td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════ TAB: WATCH LOGS ══════════════ -->
+    <div id="panelLogs" style="display:none">
+      <div class="filters">
+        <div class="fil-group">
+          <label>🔍 بحث باسم أو كود</label>
+          <input type="text" id="lSearch" placeholder="اسم الطالب أو الفيديو..." oninput="renderLogs()">
+        </div>
+        <div class="fil-group">
+          <label>📦 CODE</label>
+          <select id="lCode" onchange="renderLogs()">
+            <option value="">الكل</option>
+            <option>CODE1</option><option>CODE2</option><option>CODE3</option>
+            <option>CODE4</option><option>CODE5</option><option>CODE6</option>
+            <option>CODE7</option><option>CODE8</option><option>CODE9</option>
+            <option>CODE10</option><option>CODE11</option><option>CODE12</option><option>CODE13</option>
+          </select>
+        </div>
+        <button class="btn-export" onclick="exportLogsCSV()"><i class="fas fa-download"></i> تصدير CSV</button>
+      </div>
+      <div class="table-card">
+        <div class="table-header">
+          <h2>📋 سجل المشاهدات <span class="count-badge" id="lCount">0</span></h2>
+        </div>
+        <div style="overflow-x:auto">
+          <table>
+            <thead><tr>
+              <th>الطالب</th>
+              <th>كود الدخول</th>
+              <th>الفيديو</th>
+              <th>CODE</th>
+              <th>الفصل</th>
+              <th>الوقت</th>
+            </tr></thead>
+            <tbody id="logsBody"><tr class="empty-row"><td colspan="6"><div class="spinner"><i class="fas fa-spinner fa-spin"></i></div></td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════ TAB: LOGIN LOGS ══════════════ -->
+    <div id="panelLogin" style="display:none">
+      <div class="filters">
+        <div class="fil-group">
+          <label>🔍 بحث</label>
+          <input type="text" id="llSearch" placeholder="اسم أو كود..." oninput="renderLoginLogs()">
+        </div>
+        <button class="btn-export" onclick="exportLoginCSV()"><i class="fas fa-download"></i> تصدير CSV</button>
+      </div>
+      <div class="table-card">
+        <div class="table-header">
+          <h2>🔑 سجل الدخول <span class="count-badge" id="llCount">0</span></h2>
+        </div>
+        <div style="overflow-x:auto">
+          <table>
+            <thead><tr>
+              <th>الطالب</th>
+              <th>كود الدخول</th>
+              <th>عدد الدخولات</th>
+              <th>آخر دخول</th>
+              <th>أول دخول</th>
+            </tr></thead>
+            <tbody id="loginBody"><tr class="empty-row"><td colspan="5"><div class="spinner"><i class="fas fa-spinner fa-spin"></i></div></td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════ TAB: INACTIVE ══════════════ -->
+    <div id="panelInactive" style="display:none">
+      <div class="filters">
+        <div class="fil-group">
+          <label>⏱️ لم يدخل منذ (أيام)</label>
+          <select id="inDays" onchange="renderInactive()">
+            <option value="3">3 أيام</option>
+            <option value="7" selected>7 أيام</option>
+            <option value="14">14 يوم</option>
+            <option value="30">30 يوم</option>
+            <option value="9999">لم يدخل قط</option>
+          </select>
+        </div>
+        <div class="fil-group">
+          <label>📚 القسم</label>
+          <select id="inLang" onchange="renderInactive()">
+            <option value="">الكل</option>
+            <option value="عربي">عربي</option>
+            <option value="لغات">لغات</option>
+          </select>
+        </div>
+        <button class="btn-export" onclick="exportInactiveCSV()"><i class="fas fa-download"></i> تصدير CSV</button>
+      </div>
+      <div class="table-card">
+        <div class="table-header">
+          <h2>😴 الطلاب غير النشطين <span class="count-badge" id="inCount">0</span></h2>
+        </div>
+        <div style="overflow-x:auto">
+          <table>
+            <thead><tr>
+              <th>الطالب</th>
+              <th>الكود</th>
+              <th>القسم</th>
+              <th>VIDEO CODE</th>
+              <th>آخر دخول</th>
+              <th>مشاهدات</th>
+            </tr></thead>
+            <tbody id="inactiveBody"><tr class="empty-row"><td colspan="6"><div class="spinner"><i class="fas fa-spinner fa-spin"></i></div></td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+firebase.initializeApp({
+  apiKey:"AIzaSyBXsX0v_7p8CHDFiTUm4XkQsoZIqGueAOk",
+  authDomain:"the-process-5d196.firebaseapp.com",
+  databaseURL:"https://the-process-5d196-default-rtdb.firebaseio.com",
+  projectId:"the-process-5d196",
+  storageBucket:"the-process-5d196.firebasestorage.app",
+  messagingSenderId:"96415822332",
+  appId:"1:96415822332:web:2be476bee2e474383d8279"
+});
+var db = firebase.database();
+var PASS = "mora.admin.2026";
+
+// ── State ──────────────────────────────────────────────────
+var allStudents  = {};   // code → student obj
+var watchStats   = {};   // videoKey → {views, title, code, chapter, ...}
+var watchLogsArr = [];   // [{studentCode, studentName, videoTitle, videoCode, chapterNum, chapterName, at}]
+var loginLogsMap = {};   // studentCode → [{at, name}]
+var studentWatches = {}; // studentCode → count
+var studentLastLog = {}; // studentCode → {videoTitle, at}
+
+// ── Auth ───────────────────────────────────────────────────
+function submitAuth(){
+  var p = document.getElementById('adminPass').value;
+  if(p === PASS){
+    sessionStorage.setItem('analyticsAuth','yes');
+    document.getElementById('authScreen').style.display='none';
+    document.getElementById('app').style.display='block';
+    loadAll();
+  } else {
+    document.getElementById('authError').textContent='❌ كلمة المرور غلط!';
+    document.getElementById('adminPass').value='';
+  }
+}
+document.addEventListener('keydown',function(e){
+  if(e.key==='Enter' && document.getElementById('authScreen').style.display!=='none') submitAuth();
+});
+if(sessionStorage.getItem('analyticsAuth')==='yes'){
+  document.getElementById('authScreen').style.display='none';
+  document.getElementById('app').style.display='block';
+  loadAll();
+}
+
+// ── Load All Data ──────────────────────────────────────────
+function loadAll(){
+  showSpinners();
+  var p1 = db.ref('students').once('value').then(s=>{ allStudents = s.val()||{}; });
+  var p2 = db.ref('videoStats').once('value').then(s=>{ watchStats = s.val()||{}; });
+  var p3 = db.ref('watchLogs').once('value').then(s=>{
+    watchLogsArr=[];
+    var data=s.val()||{};
+    Object.values(data).forEach(function(l){ watchLogsArr.push(l); });
+    watchLogsArr.sort(function(a,b){ return (b.at||0)-(a.at||0); });
+  });
+  var p4 = db.ref('loginLogs').once('value').then(s=>{
+    loginLogsMap={};
+    var data=s.val()||{};
+    Object.entries(data).forEach(function(e){
+      var code=e[0], logs=e[1]||{};
+      loginLogsMap[code]=Object.values(logs).sort(function(a,b){return (b.at||0)-(a.at||0);});
+    });
+  });
+
+  Promise.all([p1,p2,p3,p4]).then(function(){
+    buildDerived();
+    updateKPIs();
+    renderStudents();
+    renderVideos();
+    renderLogs();
+    renderLoginLogs();
+    renderInactive();
+    showToast('✅ تم تحميل البيانات');
+  }).catch(function(e){ showToast('❌ خطأ: '+e.message); });
+}
+
+function buildDerived(){
+  studentWatches={};
+  studentLastLog={};
+  watchLogsArr.forEach(function(l){
+    var c=l.studentCode||'';
+    studentWatches[c]=(studentWatches[c]||0)+1;
+    if(!studentLastLog[c]) studentLastLog[c]={videoTitle:l.videoTitle,at:l.at};
+  });
+}
+
+function showSpinners(){
+  ['studentsBody','videosBody','logsBody','loginBody','inactiveBody'].forEach(function(id){
+    document.getElementById(id).innerHTML='<tr class="empty-row"><td colspan="8"><div class="spinner"><i class="fas fa-spinner fa-spin"></i></div></td></tr>';
+  });
+}
+
+// ── KPIs ───────────────────────────────────────────────────
+function updateKPIs(){
+  var students=Object.keys(allStudents).length;
+  var totalWatches=watchLogsArr.length;
+  var activeStudents=Object.keys(studentWatches).length;
+  var totalLogins=Object.values(loginLogsMap).reduce(function(s,a){return s+a.length;},0);
+  var totalVideos=Object.keys(watchStats).length;
+
+  document.getElementById('kpiStudents').textContent=students;
+  document.getElementById('kpiWatches').textContent=totalWatches;
+  document.getElementById('kpiActive').textContent=activeStudents;
+  document.getElementById('kpiLogins').textContent=totalLogins;
+  document.getElementById('kpiVideos').textContent=totalVideos;
+}
+
+// ── Tab Switch ─────────────────────────────────────────────
+var panels=['students','videos','logs','login','inactive'];
+function switchTab(tab){
+  panels.forEach(function(p){
+    document.getElementById('panel'+cap(p)).style.display=p===tab?'block':'none';
+    document.getElementById('tab'+cap(p)).className='tab-btn'+(p===tab?' active':'');
+  });
+}
+function cap(s){return s.charAt(0).toUpperCase()+s.slice(1);}
+
+// ── Helpers ────────────────────────────────────────────────
+function fmtDate(ts){
+  if(!ts) return '—';
+  var d=new Date(ts);
+  return d.toLocaleDateString('ar-EG')+' '+d.toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'});
+}
+function timeAgo(ts){
+  if(!ts) return 'لم يدخل';
+  var diff=Date.now()-ts;
+  var m=Math.floor(diff/60000);
+  if(m<2)return 'الآن';
+  if(m<60)return m+' دقيقة';
+  var h=Math.floor(m/60);
+  if(h<24)return h+' ساعة';
+  var day=Math.floor(h/24);
+  if(day===1)return 'أمس';
+  return day+' يوم';
+}
+function isOnline(ts){ return ts && (Date.now()-ts)<10*60000; }
+function maxViews(){
+  var vals=Object.values(watchStats).map(function(v){return v.views||0;});
+  return vals.length?Math.max.apply(null,vals):1;
+}
+function showToast(msg){
+  var t=document.getElementById('toast');
+  t.textContent=msg;t.className='toast show';
+  setTimeout(function(){t.classList.remove('show');},3000);
+}
+
+// ── Students Tab ───────────────────────────────────────────
+function renderStudents(){
+  var q=(document.getElementById('sSearch').value||'').toLowerCase();
+  var lang=document.getElementById('sLang').value;
+  var sort=document.getElementById('sSort').value;
+
+  var entries=Object.entries(allStudents).filter(function(e){
+    var code=e[0],s=e[1];
+    var matchQ=!q||(s.name||'').toLowerCase().includes(q)||code.includes(q);
+    var matchL=!lang||s.language===lang;
+    return matchQ&&matchL;
+  });
+
+  entries.sort(function(a,b){
+    var ca=a[0],cb=b[0];
+    var sa=a[1],sb=b[1];
+    var wa=studentWatches[ca]||0, wb=studentWatches[cb]||0;
+    var la=sa.lastSeen||0, lb=sb.lastSeen||0;
+    if(sort==='watches_desc')return wb-wa;
+    if(sort==='watches_asc')return wa-wb;
+    if(sort==='last_desc')return lb-la;
+    if(sort==='last_asc')return la-lb;
+    return (sa.name||'').localeCompare(sb.name||'','ar');
+  });
+
+  document.getElementById('sCount').textContent=entries.length;
+  var tbody=document.getElementById('studentsBody');
+  if(!entries.length){ tbody.innerHTML='<tr class="empty-row"><td colspan="8">لا يوجد طلاب</td></tr>'; return; }
+
+  var html='';
+  entries.forEach(function(e){
+    var code=e[0],s=e[1];
+    var watches=studentWatches[code]||0;
+    var last=s.lastSeen||0;
+    var online=isOnline(last);
+    var lastVid=studentLastLog[code]?studentLastLog[code].videoTitle:'—';
+
+    html+='<tr>';
+    html+='<td><strong>'+(s.name||'—')+'</strong><span class="online-dot '+(online?'online':'offline')+'"></span></td>';
+    html+='<td><code style="background:#f5f5f5;padding:2px 7px;border-radius:6px;font-size:.85rem">'+code+'</code></td>';
+    html+='<td><span class="badge '+(s.language==='عربي'?'badge-red':'badge-blue')+'">'+(s.language||'—')+'</span></td>';
+    html+='<td><span class="badge badge-purple">'+(s.videoCode||'—')+'</span></td>';
+    html+='<td><strong style="color:var(--primary)">'+watches+'</strong></td>';
+    html+='<td style="font-size:.82rem;color:var(--muted)">'+(last?timeAgo(last)+' <br><small>'+fmtDate(last)+'</small>':'لم يدخل')+'</td>';
+    html+='<td style="min-width:100px"><div class="act-bar-wrap"><div class="act-bar" style="width:'+Math.min(100,Math.round(watches/(maxViews()||1)*100))+'%"></div></div></td>';
+    html+='<td><button class="expand-btn" onclick="toggleExpand(\'exp_'+code+'\',\''+code+'\')"><i class="fas fa-chevron-down"></i> تفاصيل</button></td>';
+    html+='</tr>';
+    // Sub row for watch history
+    html+='<tr class="sub-row" id="exp_'+code+'">';
+    html+='<td colspan="8"><div id="expContent_'+code+'"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</div></td>';
+    html+='</tr>';
+  });
+  tbody.innerHTML=html;
+}
+
+function toggleExpand(rowId, studentCode){
+  var row=document.getElementById(rowId);
+  var isOpen=row.classList.contains('open');
+  // close all
+  document.querySelectorAll('.sub-row.open').forEach(function(r){r.classList.remove('open');});
+  if(!isOpen){
+    row.classList.add('open');
+    loadStudentDetail(studentCode);
+  }
+}
+
+function loadStudentDetail(code){
+  var el=document.getElementById('expContent_'+code);
+  var logs=watchLogsArr.filter(function(l){return l.studentCode===code;});
+  var loginLogs=loginLogsMap[code]||[];
+  if(!logs.length && !loginLogs.length){
+    el.innerHTML='<p style="color:#aaa;padding:.5rem">لا يوجد نشاط مسجل بعد</p>';
+    return;
+  }
+  var html='<div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;flex-wrap:wrap">';
+  // Watch logs
+  html+='<div><strong style="color:var(--primary);font-size:.9rem">▶️ آخر المشاهدات</strong>';
+  if(logs.length){
+    html+='<table class="sub-table" style="margin-top:.5rem"><thead><tr><th>الفيديو</th><th>CODE</th><th>الوقت</th></tr></thead><tbody>';
+    logs.slice(0,10).forEach(function(l){
+      html+='<tr><td>'+(l.videoTitle||'—')+'</td><td><span class="badge badge-purple">'+(l.videoCode||'—')+'</span></td><td style="font-size:.8rem;direction:ltr">'+fmtDate(l.at)+'</td></tr>';
+    });
+    html+='</tbody></table>';
+    if(logs.length>10) html+='<p style="font-size:.8rem;color:#aaa;margin-top:.3rem">+ '+(logs.length-10)+' أكثر</p>';
+  } else { html+='<p style="color:#aaa;font-size:.85rem;margin-top:.3rem">لا توجد مشاهدات</p>'; }
+  html+='</div>';
+  // Login logs
+  html+='<div><strong style="color:var(--info);font-size:.9rem">🔑 آخر الدخولات</strong>';
+  if(loginLogs.length){
+    html+='<table class="sub-table" style="margin-top:.5rem"><thead><tr><th>الوقت</th></tr></thead><tbody>';
+    loginLogs.slice(0,8).forEach(function(l){
+      html+='<tr><td style="direction:ltr">'+fmtDate(l.at)+'</td></tr>';
+    });
+    html+='</tbody></table>';
+    if(loginLogs.length>8) html+='<p style="font-size:.8rem;color:#aaa;margin-top:.3rem">+ '+(loginLogs.length-8)+' أكثر</p>';
+  } else { html+='<p style="color:#aaa;font-size:.85rem;margin-top:.3rem">لا توجد دخولات</p>'; }
+  html+='</div></div>';
+  el.innerHTML=html;
+}
+
+// ── Videos Tab ─────────────────────────────────────────────
+function renderVideos(){
+  var code=document.getElementById('vCode').value;
+  var sort=document.getElementById('vSort').value;
+
+  var entries=Object.entries(watchStats).filter(function(e){
+    return !code||(e[1].code||'')===code;
+  });
+
+  entries.sort(function(a,b){
+    var va=a[1],vb=b[1];
+    if(sort==='views_desc')return (vb.views||0)-(va.views||0);
+    if(sort==='views_asc')return (va.views||0)-(vb.views||0);
+    return (vb.lastWatched||0)-(va.lastWatched||0);
+  });
+
+  document.getElementById('vCount').textContent=entries.length;
+  var tbody=document.getElementById('videosBody');
+  if(!entries.length){ tbody.innerHTML='<tr class="empty-row"><td colspan="6">لا توجد فيديوهات محسوبة بعد — اعزم طالب يشوف فيديو 😄</td></tr>'; return; }
+
+  var mx=entries.reduce(function(m,e){return Math.max(m,e[1].views||0);},1);
+  var html='';
+  entries.forEach(function(e){
+    var v=e[1];
+    var pct=Math.round((v.views||0)/mx*100);
+    html+='<tr>';
+    html+='<td><strong>'+(v.title||'—')+'</strong></td>';
+    html+='<td><span class="badge badge-purple">'+(v.code||'—')+'</span></td>';
+    html+='<td><span class="badge badge-gray">'+(v.chapterName||'فصل '+(v.chapter||''))+'</span></td>';
+    html+='<td><strong style="color:var(--primary);font-size:1.1rem">'+(v.views||0)+'</strong></td>';
+    html+='<td style="font-size:.82rem;color:var(--muted)">'+fmtDate(v.lastWatched)+'</td>';
+    html+='<td style="min-width:120px"><div class="act-bar-wrap"><div class="act-bar" style="width:'+pct+'%"></div></div></td>';
+    html+='</tr>';
+  });
+  tbody.innerHTML=html;
+}
+
+// ── Watch Logs Tab ─────────────────────────────────────────
+function renderLogs(){
+  var q=(document.getElementById('lSearch').value||'').toLowerCase();
+  var code=document.getElementById('lCode').value;
+
+  var filtered=watchLogsArr.filter(function(l){
+    var mq=!q||(l.studentName||'').toLowerCase().includes(q)||(l.studentCode||'').includes(q)||(l.videoTitle||'').toLowerCase().includes(q);
+    var mc=!code||(l.videoCode||'')===code;
+    return mq&&mc;
+  });
+
+  document.getElementById('lCount').textContent=filtered.length;
+  var tbody=document.getElementById('logsBody');
+  if(!filtered.length){ tbody.innerHTML='<tr class="empty-row"><td colspan="6">لا يوجد سجلات مشاهدة بعد</td></tr>'; return; }
+
+  var html='';
+  filtered.slice(0,300).forEach(function(l){
+    html+='<tr>';
+    html+='<td><strong>'+(l.studentName||'—')+'</strong></td>';
+    html+='<td><code style="font-size:.82rem">'+(l.studentCode||'—')+'</code></td>';
+    html+='<td>'+(l.videoTitle||'—')+'</td>';
+    html+='<td><span class="badge badge-purple">'+(l.videoCode||'—')+'</span></td>';
+    html+='<td><span class="badge badge-gray">'+(l.chapterName||'فصل '+(l.chapterNum||''))+'</span></td>';
+    html+='<td style="font-size:.82rem;direction:ltr;color:var(--muted)">'+fmtDate(l.at)+'</td>';
+    html+='</tr>';
+  });
+  if(filtered.length>300) html+='<tr><td colspan="6" style="text-align:center;padding:.8rem;color:#aaa;font-size:.85rem">يعرض أحدث 300 سجل من '+filtered.length+'</td></tr>';
+  tbody.innerHTML=html;
+}
+
+// ── Login Logs Tab ─────────────────────────────────────────
+function renderLoginLogs(){
+  var q=(document.getElementById('llSearch').value||'').toLowerCase();
+
+  var entries=Object.entries(loginLogsMap).filter(function(e){
+    var code=e[0], logs=e[1];
+    var name=(allStudents[code]||{}).name||'';
+    return !q||name.toLowerCase().includes(q)||code.includes(q);
+  });
+
+  entries.sort(function(a,b){
+    var la=a[1][0]?a[1][0].at:0;
+    var lb=b[1][0]?b[1][0].at:0;
+    return lb-la;
+  });
+
+  document.getElementById('llCount').textContent=entries.length;
+  var tbody=document.getElementById('loginBody');
+  if(!entries.length){ tbody.innerHTML='<tr class="empty-row"><td colspan="5">لا يوجد سجلات دخول بعد</td></tr>'; return; }
+
+  var html='';
+  entries.forEach(function(e){
+    var code=e[0], logs=e[1];
+    var student=allStudents[code]||{};
+    var name=student.name||logs[0].name||'—';
+    var last=logs[0]?logs[0].at:0;
+    var first=logs[logs.length-1]?logs[logs.length-1].at:0;
+    html+='<tr>';
+    html+='<td><strong>'+name+'</strong></td>';
+    html+='<td><code style="font-size:.82rem">'+code+'</code></td>';
+    html+='<td><strong style="color:var(--info)">'+logs.length+'</strong></td>';
+    html+='<td style="font-size:.82rem;color:var(--muted)">'+fmtDate(last)+'</td>';
+    html+='<td style="font-size:.82rem;color:var(--muted)">'+fmtDate(first)+'</td>';
+    html+='</tr>';
+  });
+  tbody.innerHTML=html;
+}
+
+// ── Inactive Tab ───────────────────────────────────────────
+function renderInactive(){
+  var days=parseInt(document.getElementById('inDays').value)||7;
+  var lang=document.getElementById('inLang').value;
+  var cutoff=days===9999?Infinity:Date.now()-(days*86400000);
+
+  var entries=Object.entries(allStudents).filter(function(e){
+    var code=e[0],s=e[1];
+    var last=s.lastSeen||0;
+    var inactive=days===9999?!last:(!last||last<cutoff);
+    var matchL=!lang||s.language===lang;
+    return inactive&&matchL;
+  });
+
+  entries.sort(function(a,b){
+    return (a[1].lastSeen||0)-(b[1].lastSeen||0);
+  });
+
+  document.getElementById('inCount').textContent=entries.length;
+  var tbody=document.getElementById('inactiveBody');
+  if(!entries.length){ tbody.innerHTML='<tr class="empty-row"><td colspan="6">🎉 كل الطلاب نشطين!</td></tr>'; return; }
+
+  var html='';
+  entries.forEach(function(e){
+    var code=e[0],s=e[1];
+    var last=s.lastSeen||0;
+    var watches=studentWatches[code]||0;
+    html+='<tr style="background:#fff8f8">';
+    html+='<td><strong>'+(s.name||'—')+'</strong></td>';
+    html+='<td><code style="font-size:.82rem">'+code+'</code></td>';
+    html+='<td><span class="badge '+(s.language==='عربي'?'badge-red':'badge-blue')+'">'+(s.language||'—')+'</span></td>';
+    html+='<td><span class="badge badge-purple">'+(s.videoCode||'—')+'</span></td>';
+    html+='<td style="color:var(--danger);font-size:.85rem">'+(last?timeAgo(last):'لم يدخل قط ❌')+'</td>';
+    html+='<td>'+watches+'</td>';
+    html+='</tr>';
+  });
+  tbody.innerHTML=html;
+}
+
+// ── CSV Exports ────────────────────────────────────────────
+function downloadCSV(rows, name){
+  var content='\uFEFF'+rows.join('\n');
+  var blob=new Blob([content],{type:'text/csv;charset=utf-8;'});
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement('a');
+  a.href=url; a.download=name+'_'+new Date().toISOString().split('T')[0]+'.csv'; a.click();
+}
+
+function exportStudentsCSV(){
+  var rows=['الاسم,الكود,القسم,VIDEO CODE,المشاهدات,آخر دخول,التليفون,الإيميل'];
+  Object.entries(allStudents).forEach(function(e){
+    var code=e[0],s=e[1];
+    rows.push([s.name||'',code,s.language||'',s.videoCode||'',studentWatches[code]||0,
+      s.lastSeen?new Date(s.lastSeen).toLocaleString('ar-EG'):'لم يدخل',
+      s.phone||'',s.email||''].join(','));
+  });
+  downloadCSV(rows,'students_analytics');
+}
+function exportVideosCSV(){
+  var rows=['الفيديو,CODE,الفصل,المشاهدات,آخر مشاهدة'];
+  Object.values(watchStats).forEach(function(v){
+    rows.push([(v.title||'').replace(/,/g,' '),v.code||'',v.chapterName||'',v.views||0,
+      v.lastWatched?new Date(v.lastWatched).toLocaleString('ar-EG'):'—'].join(','));
+  });
+  downloadCSV(rows,'videos_analytics');
+}
+function exportLogsCSV(){
+  var rows=['الطالب,كود الدخول,الفيديو,CODE,الفصل,الوقت'];
+  watchLogsArr.forEach(function(l){
+    rows.push([(l.studentName||'').replace(/,/g,' '),(l.studentCode||''),
+      (l.videoTitle||'').replace(/,/g,' '),(l.videoCode||''),(l.chapterName||''),
+      l.at?new Date(l.at).toLocaleString('ar-EG'):'—'].join(','));
+  });
+  downloadCSV(rows,'watch_logs');
+}
+function exportLoginCSV(){
+  var rows=['الطالب,الكود,عدد الدخولات,آخر دخول,أول دخول'];
+  Object.entries(loginLogsMap).forEach(function(e){
+    var code=e[0],logs=e[1];
+    var s=allStudents[code]||{};
+    rows.push([(s.name||logs[0]&&logs[0].name||'').replace(/,/g,' '),code,logs.length,
+      logs[0]?new Date(logs[0].at).toLocaleString('ar-EG'):'—',
+      logs[logs.length-1]?new Date(logs[logs.length-1].at).toLocaleString('ar-EG'):'—'].join(','));
+  });
+  downloadCSV(rows,'login_logs');
+}
+function exportInactiveCSV(){
+  var days=parseInt(document.getElementById('inDays').value)||7;
+  var cutoff=days===9999?Infinity:Date.now()-(days*86400000);
+  var rows=['الاسم,الكود,القسم,VIDEO CODE,آخر دخول,مشاهدات,التليفون'];
+  Object.entries(allStudents).forEach(function(e){
+    var code=e[0],s=e[1];
+    var last=s.lastSeen||0;
+    var inactive=days===9999?!last:(!last||last<cutoff);
+    if(!inactive)return;
+    rows.push([(s.name||'').replace(/,/g,' '),code,s.language||'',s.videoCode||'',
+      last?new Date(last).toLocaleString('ar-EG'):'لم يدخل',
+      studentWatches[code]||0,s.phone||''].join(','));
+  });
+  downloadCSV(rows,'inactive_students');
+}
+</script>
+</body>
+</html>
