@@ -8,6 +8,7 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <style>
 :root{
   --primary:#800000;--primary-light:#a00000;--gold:#D4AF37;
@@ -144,9 +145,11 @@ tbody tr:last-child td{border-bottom:none;}
     <div style="font-size:3rem;margin-bottom:.5rem">📊</div>
     <h1>Analytics</h1>
     <p>The Process — لوحة الإحصائيات</p>
+    <input type="email" id="adminEmail" class="auth-input" placeholder="البريد الإلكتروني" style="letter-spacing:normal;text-align:right;direction:ltr"
+           onkeydown="if(event.key==='Enter')submitAuth()">
     <input type="password" id="adminPass" class="auth-input" placeholder="كلمة المرور"
            onkeydown="if(event.key==='Enter')submitAuth()">
-    <button class="auth-btn" onclick="submitAuth()"><i class="fas fa-chart-bar"></i> دخول</button>
+    <button class="auth-btn" id="authBtnEl" onclick="submitAuth()"><i class="fas fa-chart-bar"></i> دخول</button>
     <div id="authError"></div>
   </div>
 </div>
@@ -160,6 +163,7 @@ tbody tr:last-child td{border-bottom:none;}
       <button class="btn-danger-sm" onclick="confirmDelete('watchLogs')"><i class="fas fa-trash"></i> حذف سجل المشاهدات</button>
       <button class="btn-danger-sm" onclick="confirmDelete('loginLogs')"><i class="fas fa-trash"></i> حذف سجل الدخول</button>
       <a href="admin.html" class="back-btn"><i class="fas fa-arrow-right"></i> لوحة التحكم</a>
+      <button class="back-btn" onclick="auth.signOut().then(function(){ location.reload(); })" style="background:rgba(220,53,69,.3);border-color:rgba(220,53,69,.5)"><i class="fas fa-sign-out-alt"></i> خروج</button>
     </div>
   </header>
 
@@ -462,8 +466,8 @@ firebase.initializeApp({
   messagingSenderId:"96415822332",
   appId:"1:96415822332:web:2be476bee2e474383d8279"
 });
-var db = firebase.database();
-var PASS = "mora.admin.2026";
+var db   = firebase.database();
+var auth = firebase.auth();
 
 // ── State ──────────────────────────────────────────────────
 var allStudents  = {};   // code → student obj
@@ -474,26 +478,58 @@ var studentWatches = {}; // studentCode → count
 var studentLastLog = {}; // studentCode → {videoTitle, at}
 
 // ── Auth ───────────────────────────────────────────────────
-function submitAuth(){
-  var p = document.getElementById('adminPass').value;
-  if(p === PASS){
-    sessionStorage.setItem('analyticsAuth','yes');
-    document.getElementById('authScreen').style.display='none';
-    document.getElementById('app').style.display='block';
-    loadAll();
+function setAuthLoading(loading){
+  var btn = document.getElementById('authBtnEl');
+  if(loading){
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الدخول...';
   } else {
-    document.getElementById('authError').textContent='❌ كلمة المرور غلط!';
-    document.getElementById('adminPass').value='';
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-chart-bar"></i> دخول';
   }
 }
-document.addEventListener('keydown',function(e){
-  if(e.key==='Enter' && document.getElementById('authScreen').style.display!=='none') submitAuth();
-});
-if(sessionStorage.getItem('analyticsAuth')==='yes'){
+
+function enterApp(){
   document.getElementById('authScreen').style.display='none';
   document.getElementById('app').style.display='block';
   loadAll();
 }
+
+function submitAuth(){
+  var email = document.getElementById('adminEmail').value.trim();
+  var pass  = document.getElementById('adminPass').value;
+  var errEl = document.getElementById('authError');
+  errEl.textContent = '';
+  if(!email || !pass){
+    errEl.textContent = '❌ من فضلك ادخل الإيميل وكلمة المرور';
+    return;
+  }
+  setAuthLoading(true);
+  auth.signInWithEmailAndPassword(email, pass)
+    .then(function(){
+      setAuthLoading(false);
+      // onAuthStateChanged will handle enterApp
+    })
+    .catch(function(e){
+      setAuthLoading(false);
+      var msg = '❌ خطأ في الدخول';
+      if(e.code === 'auth/user-not-found' || e.code === 'auth/wrong-password' || e.code === 'auth/invalid-credential')
+        msg = '❌ الإيميل أو كلمة المرور غلط!';
+      else if(e.code === 'auth/invalid-email')
+        msg = '❌ الإيميل مش صحيح';
+      else if(e.code === 'auth/too-many-requests')
+        msg = '❌ محاولات كتير، استنى شوية';
+      errEl.textContent = msg;
+      document.getElementById('adminPass').value = '';
+    });
+}
+
+// Listen to auth state
+auth.onAuthStateChanged(function(user){
+  if(user){
+    enterApp();
+  }
+});
 
 // ── Load All Data ──────────────────────────────────────────
 function loadAll(){
